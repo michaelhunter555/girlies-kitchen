@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+:root {
+  --gk-green: #00773c;
+  --gk-gold: #f9d616;
+  --gk-black: #000000;
+  --gk-cream: #fef9e7;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--gk-cream);
+  color: #111111;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
