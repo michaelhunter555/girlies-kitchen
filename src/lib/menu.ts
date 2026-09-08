@@ -28,6 +28,7 @@ export type Addon = {
 export const TRAY_NOTE =
   "Small = Half Pan (serves 10-12). Large = Full Pan (serves 20-24). All trays include a lid and a spoon.";
 
+/** Items with photos listed first until more images are added. */
 export const MENU_ITEMS: MenuItem[] = [
   {
     id: "jerk-chicken",
@@ -42,26 +43,6 @@ export const MENU_ITEMS: MenuItem[] = [
     category: "protein",
     prices: { small: 140, large: 255 },
     image: "/menu/curry-chicken.png",
-  },
-  {
-    id: "brown-stew-chicken",
-    name: "Brown Stew Chicken",
-    category: "protein",
-    prices: { small: 145, large: 265 },
-  },
-  {
-    id: "curry-goat",
-    name: "Curry Goat",
-    category: "protein",
-    prices: { small: 225, large: 410 },
-    premiumDeposit: true,
-  },
-  {
-    id: "oxtail",
-    name: "Oxtail with Broad Beans",
-    category: "protein",
-    prices: { small: 255, large: 460 },
-    premiumDeposit: true,
   },
   {
     id: "escovitch-fish",
@@ -95,6 +76,26 @@ export const MENU_ITEMS: MenuItem[] = [
     category: "side",
     prices: { small: 85, large: 155 },
     image: "/menu/steam-cabbage.png",
+  },
+  {
+    id: "brown-stew-chicken",
+    name: "Brown Stew Chicken",
+    category: "protein",
+    prices: { small: 145, large: 265 },
+  },
+  {
+    id: "curry-goat",
+    name: "Curry Goat",
+    category: "protein",
+    prices: { small: 225, large: 410 },
+    premiumDeposit: true,
+  },
+  {
+    id: "oxtail",
+    name: "Oxtail with Broad Beans",
+    category: "protein",
+    prices: { small: 255, large: 460 },
+    premiumDeposit: true,
   },
   {
     id: "fried-plantains",

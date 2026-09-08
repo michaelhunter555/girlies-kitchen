@@ -1,5 +1,5 @@
 import { ADDONS, COMBOS, MENU_ITEMS, type TraySize } from "@/lib/menu";
-import { DELIVERY_FEES, DEPOSIT } from "@/lib/constants";
+import { DEPOSIT } from "@/lib/constants";
 
 export type CheckoutSelection = {
   trays: Array<{
@@ -10,7 +10,8 @@ export type CheckoutSelection = {
   }>;
   comboId?: string;
   addonIds?: string[];
-  deliveryZoneId: string;
+  /** Server-verified delivery fee in dollars */
+  deliveryFee: number;
 };
 
 export type PricedLine = {
@@ -96,17 +97,12 @@ export function priceOrder(selection: CheckoutSelection): PricedOrder {
     });
   }
 
-  const delivery = DELIVERY_FEES.find((d) => d.id === selection.deliveryZoneId);
-  if (!delivery) {
-    throw new Error(`Unknown delivery zone: ${selection.deliveryZoneId}`);
-  }
-
   if (lines.length === 0) {
     throw new Error("Select at least one tray, combo, or add-on");
   }
 
+  const deliveryFee = Math.max(0, Number(selection.deliveryFee) || 0);
   const subtotal = lines.reduce((sum, line) => sum + line.lineTotal, 0);
-  const deliveryFee = delivery.fee;
   const total = subtotal + deliveryFee;
   const depositPercent = premium
     ? DEPOSIT.premiumPercent

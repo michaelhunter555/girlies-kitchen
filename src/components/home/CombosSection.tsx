@@ -5,7 +5,7 @@ import Container from "@mui/material/Container";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { ADDONS, COMBOS } from "@/lib/menu";
-import { DELIVERY_FEES } from "@/lib/constants";
+import { DELIVERY_PRICING } from "@/lib/constants";
 import { brand } from "@/theme/theme";
 
 export function CombosSection() {
@@ -134,21 +134,21 @@ export function CombosSection() {
             >
               Delivery
             </Typography>
-            <Stack spacing={1}>
-              {DELIVERY_FEES.map((fee) => (
-                <Box
-                  key={fee.id}
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: 2,
-                    fontWeight: 700,
-                  }}
-                >
-                  <span>{fee.label}</span>
-                  <span>${fee.fee}</span>
-                </Box>
-              ))}
+            <Stack spacing={1} sx={{ fontWeight: 700 }}>
+              <Typography sx={{ color: brand.gold, fontWeight: 700 }}>
+                ${DELIVERY_PRICING.ratePerMile} per driving mile from Belcamp, MD
+              </Typography>
+              <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
+                <span>Minimum</span>
+                <span>${DELIVERY_PRICING.minimumFee}</span>
+              </Box>
+              <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
+                <span>Maximum</span>
+                <span>${DELIVERY_PRICING.maximumFee}</span>
+              </Box>
+              <Typography sx={{ color: brand.cream, fontWeight: 600, fontSize: "0.9rem", pt: 0.5 }}>
+                Enter your address on the schedule form for an exact quote.
+              </Typography>
             </Stack>
           </Box>
         </Box>

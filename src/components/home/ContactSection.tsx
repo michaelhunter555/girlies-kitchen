@@ -9,7 +9,7 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import PhoneInTalkIcon from "@mui/icons-material/PhoneInTalk";
 import PlaceIcon from "@mui/icons-material/Place";
-import { BUSINESS } from "@/lib/constants";
+import { BUSINESS, DELIVERY_PRICING } from "@/lib/constants";
 import { brand } from "@/theme/theme";
 import { FlagBand } from "@/components/brand/FlagBand";
 
@@ -152,8 +152,9 @@ export function ContactSection() {
                   50% deposit on most orders. 75% deposit for oxtail, goat, or fish.
                 </Typography>
                 <Typography>
-                  Delivery available within 10 miles ($25), 11 to 20 miles ($40),
-                  and Baltimore ($60).
+                  Delivery is ${DELIVERY_PRICING.ratePerMile}/mile from Belcamp,
+                  MD (min ${DELIVERY_PRICING.minimumFee}). Schedule online for an
+                  exact mileage quote.
                 </Typography>
                 <Typography>
                   Prefer to talk it through? Call {BUSINESS.phone} and we will

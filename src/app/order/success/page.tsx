@@ -4,9 +4,14 @@ import Button from "@mui/material/Button";
 import Container from "@mui/material/Container";
 import Typography from "@mui/material/Typography";
 import { BUSINESS } from "@/lib/constants";
-import { brand } from "@/theme/theme";
+import { brand } from "@/theme/brand";
 import { FlagBand } from "@/components/brand/FlagBand";
 import { getStripe } from "@/lib/stripe";
+import {
+  getOrderById,
+  getOrderByStripeSession,
+  updateOrder,
+} from "@/lib/orders-store";
 
 type Props = {
   searchParams: Promise<{ session_id?: string }>;
@@ -27,13 +32,32 @@ export default async function OrderSuccessPage({ searchParams }: Props) {
       if (session.amount_total != null) {
         amountPaid = `$${(session.amount_total / 100).toFixed(2)}`;
       }
-      customerEmail = session.customer_details?.email || session.customer_email || null;
+      customerEmail =
+        session.customer_details?.email || session.customer_email || null;
       orderTotal = session.metadata?.orderTotal
         ? `$${Number(session.metadata.orderTotal).toFixed(2)}`
         : null;
       balanceDue = session.metadata?.balanceDue
         ? `$${Number(session.metadata.balanceDue).toFixed(2)}`
         : null;
+
+      if (session.payment_status === "paid") {
+        const order =
+          (session.metadata?.orderId
+            ? await getOrderById(session.metadata.orderId)
+            : null) || (await getOrderByStripeSession(session.id));
+        if (order && order.status === "pending") {
+          await updateOrder(order.id, {
+            status: "deposit_paid",
+            amountPaid: (session.amount_total || 0) / 100,
+            stripeCheckoutSessionId: session.id,
+            stripePaymentIntentId:
+              typeof session.payment_intent === "string"
+                ? session.payment_intent
+                : undefined,
+          });
+        }
+      }
     } catch {
       // Session lookup failed; still show thank-you UI.
     }

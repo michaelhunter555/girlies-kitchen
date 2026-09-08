@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
+import {
+  getOrderByStripeSession,
+  updateOrder,
+} from "@/lib/orders-store";
 import Stripe from "stripe";
 
 export const runtime = "nodejs";
@@ -31,12 +35,25 @@ export async function POST(req: Request) {
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
-    // Order persistence (Mongo) hooks in here once MONGODB_URI is set.
-    console.log("Deposit paid", {
-      sessionId: session.id,
-      email: session.customer_email,
-      metadata: session.metadata,
-    });
+    const order =
+      (session.metadata?.orderId
+        ? await import("@/lib/orders-store").then((m) =>
+            m.getOrderById(session.metadata!.orderId!)
+          )
+        : null) || (await getOrderByStripeSession(session.id));
+
+    if (order) {
+      const paid = (session.amount_total || 0) / 100;
+      await updateOrder(order.id, {
+        status: "deposit_paid",
+        amountPaid: paid,
+        stripeCheckoutSessionId: session.id,
+        stripePaymentIntentId:
+          typeof session.payment_intent === "string"
+            ? session.payment_intent
+            : session.payment_intent?.id,
+      });
+    }
   }
 
   return NextResponse.json({ received: true });

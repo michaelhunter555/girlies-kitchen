@@ -114,18 +114,7 @@ export function TrayPricing() {
                             aspectRatio="1 / 1"
                           />
                         </Box>
-                      ) : (
-                        <Box
-                          sx={{
-                            width: { xs: 44, md: 56 },
-                            aspectRatio: "1 / 1",
-                            flexShrink: 0,
-                            bgcolor: brand.creamDark,
-                            border: `2px solid ${brand.black}`,
-                          }}
-                          aria-hidden
-                        />
-                      )}
+                      ) : null}
                       <Box sx={{ minWidth: 0 }}>
                         {item.name}
                         {item.alt ? (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import NextLink from "next/link";
 import Alert from "@mui/material/Alert";
@@ -21,11 +21,15 @@ import Typography from "@mui/material/Typography";
 import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
 import dayjs, { Dayjs } from "dayjs";
 import { ADDONS, COMBOS, MENU_ITEMS } from "@/lib/menu";
-import { BUSINESS, DELIVERY_FEES } from "@/lib/constants";
+import { BUSINESS } from "@/lib/constants";
 import { priceOrder } from "@/lib/pricing";
 import { brand } from "@/theme/theme";
 import { FlagBand } from "@/components/brand/FlagBand";
 import { ClickableDishImage } from "@/components/home/DishImageModal";
+import {
+  DeliveryAddressField,
+  type DeliveryQuote,
+} from "@/components/schedule/DeliveryAddressField";
 
 function money(n: number) {
   return `$${n.toFixed(2)}`;
@@ -38,12 +42,11 @@ export default function SchedulePage() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [address, setAddress] = useState("");
   const [notes, setNotes] = useState("");
   const [eventAt, setEventAt] = useState<Dayjs | null>(
     dayjs().add(3, "day").hour(12).minute(0)
   );
-  const [deliveryId, setDeliveryId] = useState(DELIVERY_FEES[0].id);
+  const [deliveryQuote, setDeliveryQuote] = useState<DeliveryQuote | null>(null);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [sizes, setSizes] = useState<Record<string, "small" | "large">>({});
   const [useAlt, setUseAlt] = useState<Record<string, boolean>>({});
@@ -52,7 +55,15 @@ export default function SchedulePage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const handleQuoteChange = useCallback((quote: DeliveryQuote | null) => {
+    setDeliveryQuote(quote);
+  }, []);
+
+  const deliveryFee =
+    deliveryQuote?.allowed ? deliveryQuote.fee : 0;
+
   const priced = useMemo(() => {
+    if (!deliveryQuote?.allowed) return null;
     try {
       return priceOrder({
         trays: MENU_ITEMS.filter((item) => selected[item.id]).map((item) => ({
@@ -62,19 +73,23 @@ export default function SchedulePage() {
         })),
         comboId: comboId || undefined,
         addonIds: ADDONS.filter((a) => addons[a.id]).map((a) => a.id),
-        deliveryZoneId: deliveryId,
+        deliveryFee,
       });
     } catch {
       return null;
     }
-  }, [selected, sizes, useAlt, comboId, addons, deliveryId]);
+  }, [selected, sizes, useAlt, comboId, addons, deliveryFee, deliveryQuote]);
 
   async function handleCheckout(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
-    if (!name || !phone || !email || !address || !eventAt) {
-      setError("Fill in your name, phone, email, address, and event time.");
+    if (!name || !phone || !email || !eventAt) {
+      setError("Fill in your name, phone, email, and event time.");
+      return;
+    }
+    if (!deliveryQuote?.allowed || !deliveryQuote.placeId) {
+      setError("Select a delivery address from the suggestions so we can calculate mileage.");
       return;
     }
     if (!priced) {
@@ -91,10 +106,10 @@ export default function SchedulePage() {
           customerName: name,
           customerPhone: phone,
           customerEmail: email,
-          deliveryAddress: address,
+          deliveryAddress: deliveryQuote.formattedAddress,
+          placeId: deliveryQuote.placeId,
           eventAt: eventAt.toISOString(),
           notes,
-          deliveryZoneId: deliveryId,
           trays: MENU_ITEMS.filter((item) => selected[item.id]).map((item) => ({
             itemId: item.id,
             size: sizes[item.id] ?? "small",
@@ -196,35 +211,13 @@ export default function SchedulePage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
-              <TextField
-                label="Delivery address"
-                required
-                fullWidth
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-              />
+              <DeliveryAddressField onQuoteChange={handleQuoteChange} />
               <DateTimePicker
                 label="Event date and time"
                 value={eventAt}
                 onChange={setEventAt}
                 slotProps={{ textField: { fullWidth: true, required: true } }}
               />
-              <FormControl fullWidth>
-                <InputLabel id="delivery-label">Delivery zone</InputLabel>
-                <Select
-                  labelId="delivery-label"
-                  label="Delivery zone"
-                  value={deliveryId}
-                  onChange={(e) => setDeliveryId(e.target.value)}
-                  sx={{ borderRadius: 0 }}
-                >
-                  {DELIVERY_FEES.map((fee) => (
-                    <MenuItem key={fee.id} value={fee.id}>
-                      {fee.label} ({money(fee.fee)})
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
               <TextField
                 label="Notes"
                 fullWidth
@@ -249,63 +242,80 @@ export default function SchedulePage() {
                 <Box
                   key={item.id}
                   sx={{
-                    display: "grid",
-                    gridTemplateColumns: {
-                      xs: "1fr",
-                      sm: item.image ? "100px 1fr" : "1fr",
-                    },
-                    gap: 1.5,
-                    alignItems: "center",
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: { xs: 0.5, sm: 1 },
                     borderBottom: `1px solid ${brand.creamDark}`,
                     pb: 1.5,
                   }}
                 >
-                  {item.image ? (
-                    <ClickableDishImage
-                      src={item.image}
-                      title={item.name}
-                      aspectRatio="1 / 1"
-                    />
-                  ) : null}
-                  <Box>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={!!selected[item.id]}
-                          onChange={(e) =>
-                            setSelected((prev) => ({
-                              ...prev,
-                              [item.id]: e.target.checked,
-                            }))
-                          }
-                          sx={{
-                            color: brand.green,
-                            "&.Mui-checked": { color: brand.green },
-                          }}
-                        />
-                      }
-                      label={
+                  <Checkbox
+                    checked={!!selected[item.id]}
+                    onChange={(e) =>
+                      setSelected((prev) => ({
+                        ...prev,
+                        [item.id]: e.target.checked,
+                      }))
+                    }
+                    sx={{
+                      mt: 0.25,
+                      color: brand.green,
+                      "&.Mui-checked": { color: brand.green },
+                    }}
+                   
+                  />
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        justifyContent: "space-between",
+                        gap: 1.5,
+                      }}
+                    >
+                      <Box sx={{ minWidth: 0, flex: 1 }}>
                         <Typography sx={{ fontWeight: 700 }}>
                           {item.name}
+                        </Typography>
+                        <Typography
+                          sx={{
+                            fontWeight: 600,
+                            color: brand.muted,
+                            fontSize: "0.85rem",
+                          }}
+                        >
+                          Small {money(item.prices.small)} | Large{" "}
+                          {money(item.prices.large)}
+                        </Typography>
+                        {item.premiumDeposit ? (
                           <Typography
-                            component="span"
                             sx={{
-                              display: "block",
-                              fontWeight: 600,
-                              color: brand.muted,
-                              fontSize: "0.85rem",
+                              fontWeight: 700,
+                              color: brand.green,
+                              fontSize: "0.75rem",
+                              letterSpacing: "0.04em",
+                              textTransform: "uppercase",
+                              mt: 0.25,
                             }}
                           >
-                            Small {money(item.prices.small)} | Large{" "}
-                            {money(item.prices.large)}
+                            75% deposit
                           </Typography>
-                        </Typography>
-                      }
-                    />
+                        ) : null}
+                      </Box>
+                      {item.image ? (
+                        <Box sx={{ width: { xs: 72, sm: 88 }, flexShrink: 0 }}>
+                          <ClickableDishImage
+                            src={item.image}
+                            title={item.name}
+                            aspectRatio="1 / 1"
+                          />
+                        </Box>
+                      ) : null}
+                    </Box>
                     <Stack
                       direction={{ xs: "column", sm: "row" }}
                       spacing={1}
-                      sx={{ mt: 0.5, pl: 4 }}
+                      sx={{ mt: 1 }}
                     >
                       <FormControl
                         size="small"
@@ -429,6 +439,39 @@ export default function SchedulePage() {
                   fontWeight: 700,
                 }}
               >
+                <span>Food subtotal</span>
+                <span>
+                  {priced
+                    ? money(priced.subtotal)
+                    : "$0.00"}
+                </span>
+              </Box>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontWeight: 700,
+                }}
+              >
+                <span>
+                  Delivery
+                  {deliveryQuote?.allowed
+                    ? ` (${deliveryQuote.miles} mi)`
+                    : ""}
+                </span>
+                <span>
+                  {deliveryQuote?.allowed
+                    ? money(deliveryQuote.fee)
+                    : "Select address"}
+                </span>
+              </Box>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontWeight: 700,
+                }}
+              >
                 <span>Order total</span>
                 <span>{priced ? money(priced.total) : "$0.00"}</span>
               </Box>
@@ -445,8 +488,8 @@ export default function SchedulePage() {
                 <span>{priced ? money(priced.depositAmount) : "$0.00"}</span>
               </Box>
               <Typography sx={{ color: brand.cream, fontSize: "0.9rem", pt: 1 }}>
-                Prices come from the catering menu. Stripe charges the deposit
-                only. Remaining balance is due before delivery.
+                Delivery is ${2}/mile from Belcamp, MD (min $15). Stripe charges
+                the deposit only. Remaining balance is due before delivery.
               </Typography>
             </Stack>
 
