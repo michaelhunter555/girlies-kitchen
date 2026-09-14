@@ -6,17 +6,22 @@ import { getOrderById, updateOrder } from "@/lib/orders-store";
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_req: Request, { params }: Params) {
-  const session = await getAdminSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  try {
+    const session = await getAdminSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  const { id } = await params;
-  const order = await getOrderById(id);
-  if (!order) {
-    return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    const { id } = await params;
+    const order = await getOrderById(id);
+    if (!order) {
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
+    return NextResponse.json({ order });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to load order";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-  return NextResponse.json({ order });
 }
 
 const patchSchema = z.object({
@@ -28,20 +33,25 @@ const patchSchema = z.object({
 });
 
 export async function PATCH(req: Request, { params }: Params) {
-  const session = await getAdminSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  try {
+    const session = await getAdminSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  const { id } = await params;
-  const parsed = patchSchema.safeParse(await req.json());
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid update" }, { status: 400 });
-  }
+    const { id } = await params;
+    const parsed = patchSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid update" }, { status: 400 });
+    }
 
-  const updated = await updateOrder(id, parsed.data);
-  if (!updated) {
-    return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    const updated = await updateOrder(id, parsed.data);
+    if (!updated) {
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
+    return NextResponse.json({ order: updated });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to update order";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-  return NextResponse.json({ order: updated });
 }

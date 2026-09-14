@@ -1,11 +1,5 @@
 import mongoose, { Schema, models, model } from "mongoose";
-
-export type OrderStatus =
-  | "pending"
-  | "deposit_paid"
-  | "confirmed"
-  | "completed"
-  | "cancelled";
+import type { OrderStatus } from "@/lib/order-types";
 
 export interface IOrderItem {
   itemId: string;
@@ -21,8 +15,9 @@ export interface IOrder {
   customerPhone: string;
   customerEmail: string;
   deliveryAddress: string;
+  placeId?: string;
+  deliveryMiles?: number;
   eventAt: Date;
-  deliveryZone: string;
   deliveryFee: number;
   notes?: string;
   items: IOrderItem[];
@@ -30,10 +25,12 @@ export interface IOrder {
   total: number;
   depositPercent: number;
   depositAmount: number;
+  balanceDue: number;
   amountPaid: number;
   status: OrderStatus;
   stripeCheckoutSessionId?: string;
   stripePaymentIntentId?: string;
+  adminNotes?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -54,10 +51,11 @@ const OrderSchema = new Schema<IOrder>(
   {
     customerName: { type: String, required: true },
     customerPhone: { type: String, required: true },
-    customerEmail: { type: String, required: true },
+    customerEmail: { type: String, required: true, index: true },
     deliveryAddress: { type: String, required: true },
-    eventAt: { type: Date, required: true },
-    deliveryZone: { type: String, required: true },
+    placeId: { type: String },
+    deliveryMiles: { type: Number },
+    eventAt: { type: Date, required: true, index: true },
     deliveryFee: { type: Number, required: true, default: 0 },
     notes: { type: String },
     items: { type: [OrderItemSchema], default: [] },
@@ -65,16 +63,20 @@ const OrderSchema = new Schema<IOrder>(
     total: { type: Number, required: true },
     depositPercent: { type: Number, required: true },
     depositAmount: { type: Number, required: true },
+    balanceDue: { type: Number, required: true, default: 0 },
     amountPaid: { type: Number, required: true, default: 0 },
     status: {
       type: String,
       enum: ["pending", "deposit_paid", "confirmed", "completed", "cancelled"],
       default: "pending",
+      index: true,
     },
-    stripeCheckoutSessionId: String,
-    stripePaymentIntentId: String,
+    stripeCheckoutSessionId: { type: String, index: true },
+    stripePaymentIntentId: { type: String },
+    adminNotes: { type: String },
   },
   { timestamps: true }
 );
 
-export const Order = models.Order || model<IOrder>("Order", OrderSchema);
+export const Order =
+  models.Order || model<IOrder>("Order", OrderSchema);

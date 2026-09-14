@@ -1,8 +1,7 @@
 import "server-only";
 
-import { promises as fs } from "fs";
-import path from "path";
-import { randomUUID } from "crypto";
+import { connectMongo } from "@/lib/mongodb";
+import { Order } from "@/models/Order";
 import type {
   CateringOrder,
   CreateOrderInput,
@@ -17,137 +16,114 @@ export type {
 } from "@/lib/order-types";
 export { ORDER_STATUSES } from "@/lib/order-types";
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const ORDERS_FILE = path.join(DATA_DIR, "orders.json");
+type OrderDoc = {
+  _id: { toString(): string };
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string;
+  deliveryAddress: string;
+  placeId?: string;
+  deliveryMiles?: number;
+  eventAt: Date | string;
+  deliveryFee: number;
+  notes?: string;
+  items: CateringOrder["items"];
+  subtotal: number;
+  total: number;
+  depositPercent: number;
+  depositAmount: number;
+  balanceDue: number;
+  amountPaid: number;
+  status: OrderStatus;
+  stripeCheckoutSessionId?: string;
+  stripePaymentIntentId?: string;
+  adminNotes?: string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+};
 
-async function ensureStore() {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  try {
-    await fs.access(ORDERS_FILE);
-  } catch {
-    const seed = buildSeedOrders();
-    await fs.writeFile(ORDERS_FILE, JSON.stringify(seed, null, 2), "utf8");
-  }
+function toIso(value: Date | string) {
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
 
-async function readOrders(): Promise<CateringOrder[]> {
-  await ensureStore();
-  const raw = await fs.readFile(ORDERS_FILE, "utf8");
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as CateringOrder[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-async function writeOrders(orders: CateringOrder[]) {
-  await ensureStore();
-  await fs.writeFile(ORDERS_FILE, JSON.stringify(orders, null, 2), "utf8");
-}
-
-function buildSeedOrders(): CateringOrder[] {
-  const now = new Date();
-  const event = new Date(now.getTime() + 1000 * 60 * 60 * 24 * 5);
-  return [
-    {
-      id: randomUUID(),
-      customerName: "Sample Customer",
-      customerPhone: "443-555-0100",
-      customerEmail: "sample@example.com",
-      deliveryAddress: "Baltimore, MD, USA",
-      placeId: "ChIJt4P01q4DyIkRWOcjQqiWSAQ",
-      deliveryMiles: 26.3,
-      eventAt: event.toISOString(),
-      deliveryFee: 52.6,
-      notes: "Demo order so the CRM is not empty. Safe to delete.",
-      items: [
-        {
-          itemId: "jerk-chicken",
-          name: "Jerk Chicken (large)",
-          size: "large",
-          quantity: 1,
-          unitPrice: 275,
-          lineTotal: 275,
-        },
-        {
-          itemId: "rice-and-peas",
-          name: "Rice and Peas (large)",
-          size: "large",
-          quantity: 1,
-          unitPrice: 155,
-          lineTotal: 155,
-        },
-      ],
-      subtotal: 430,
-      total: 482.6,
-      depositPercent: 50,
-      depositAmount: 241.3,
-      balanceDue: 241.3,
-      amountPaid: 241.3,
-      status: "deposit_paid",
-      adminNotes: "",
-      createdAt: now.toISOString(),
-      updatedAt: now.toISOString(),
-    },
-  ];
+function serializeOrder(doc: OrderDoc): CateringOrder {
+  return {
+    id: doc._id.toString(),
+    customerName: doc.customerName,
+    customerPhone: doc.customerPhone,
+    customerEmail: doc.customerEmail,
+    deliveryAddress: doc.deliveryAddress,
+    placeId: doc.placeId,
+    deliveryMiles: doc.deliveryMiles,
+    eventAt: toIso(doc.eventAt),
+    deliveryFee: doc.deliveryFee,
+    notes: doc.notes || "",
+    items: doc.items || [],
+    subtotal: doc.subtotal,
+    total: doc.total,
+    depositPercent: doc.depositPercent,
+    depositAmount: doc.depositAmount,
+    balanceDue: doc.balanceDue,
+    amountPaid: doc.amountPaid,
+    status: doc.status,
+    stripeCheckoutSessionId: doc.stripeCheckoutSessionId,
+    stripePaymentIntentId: doc.stripePaymentIntentId,
+    adminNotes: doc.adminNotes || "",
+    createdAt: toIso(doc.createdAt),
+    updatedAt: toIso(doc.updatedAt),
+  };
 }
 
 export async function listOrders(filters?: {
   status?: OrderStatus | "all";
   q?: string;
 }) {
-  let orders = await readOrders();
-  orders = orders.sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
+  await connectMongo();
 
+  const query: Record<string, unknown> = {};
   if (filters?.status && filters.status !== "all") {
-    orders = orders.filter((o) => o.status === filters.status);
+    query.status = filters.status;
   }
 
   if (filters?.q?.trim()) {
-    const q = filters.q.trim().toLowerCase();
-    orders = orders.filter((o) =>
-      [
-        o.customerName,
-        o.customerEmail,
-        o.customerPhone,
-        o.deliveryAddress,
-        o.id,
-        o.notes || "",
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(q)
-    );
+    const q = filters.q.trim();
+    query.$or = [
+      { customerName: { $regex: q, $options: "i" } },
+      { customerEmail: { $regex: q, $options: "i" } },
+      { customerPhone: { $regex: q, $options: "i" } },
+      { deliveryAddress: { $regex: q, $options: "i" } },
+      { notes: { $regex: q, $options: "i" } },
+    ];
   }
 
-  return orders;
+  const docs = await Order.find(query).sort({ createdAt: -1 }).lean();
+  return (docs as unknown as OrderDoc[]).map(serializeOrder);
 }
 
 export async function getOrderById(id: string) {
-  const orders = await readOrders();
-  return orders.find((o) => o.id === id) || null;
+  await connectMongo();
+  if (!id || !/^[a-f\d]{24}$/i.test(id)) return null;
+  const doc = await Order.findById(id).lean();
+  if (!doc) return null;
+  return serializeOrder(doc as unknown as OrderDoc);
 }
 
 export async function getOrderByStripeSession(sessionId: string) {
-  const orders = await readOrders();
-  return orders.find((o) => o.stripeCheckoutSessionId === sessionId) || null;
+  await connectMongo();
+  const doc = await Order.findOne({ stripeCheckoutSessionId: sessionId }).lean();
+  if (!doc) return null;
+  return serializeOrder(doc as unknown as OrderDoc);
 }
 
 export async function createOrder(input: CreateOrderInput) {
-  const orders = await readOrders();
-  const now = new Date().toISOString();
-  const order: CateringOrder = {
+  await connectMongo();
+  const created = await Order.create({
     ...input,
-    id: randomUUID(),
-    createdAt: now,
-    updatedAt: now,
-  };
-  orders.unshift(order);
-  await writeOrders(orders);
-  return order;
+    eventAt: new Date(input.eventAt),
+    notes: input.notes || "",
+    adminNotes: input.adminNotes || "",
+  });
+  return serializeOrder(created.toObject() as unknown as OrderDoc);
 }
 
 export async function updateOrder(
@@ -164,22 +140,23 @@ export async function updateOrder(
     >
   >
 ) {
-  const orders = await readOrders();
-  const index = orders.findIndex((o) => o.id === id);
-  if (index < 0) return null;
+  await connectMongo();
+  if (!id || !/^[a-f\d]{24}$/i.test(id)) return null;
 
-  const updated: CateringOrder = {
-    ...orders[index],
-    ...patch,
-    updatedAt: new Date().toISOString(),
-  };
-  orders[index] = updated;
-  await writeOrders(orders);
-  return updated;
+  const updated = await Order.findByIdAndUpdate(
+    id,
+    { $set: patch },
+    { new: true }
+  ).lean();
+
+  if (!updated) return null;
+  return serializeOrder(updated as unknown as OrderDoc);
 }
 
 export async function getDashboardStats() {
+  await connectMongo();
   const orders = await listOrders();
+
   const active = orders.filter(
     (o) => o.status !== "cancelled" && o.status !== "completed"
   );
